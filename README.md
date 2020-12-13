@@ -1,4 +1,7 @@
-# kaggle_titanic
+# kaggle_titanic  
+
+##  score
+random forest : 0.74641  
 
 ## How to use 
 
