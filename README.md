@@ -1,6 +1,6 @@
 # kaggle_titanic  
 
-##  score
+##  Score
 random forest : 0.74641  
 
 ## How to use 
