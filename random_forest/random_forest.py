@@ -72,11 +72,19 @@ def main():
     explanatory_test = test[["Pclass", "Sex", "Age", "Fare"]].values
 
     # machine learning by random forest
-    clf = RandomForestClassifier(n_estimators=100, random_state=100)
+    #clf = RandomForestClassifier(n_estimators=100, random_state=100)
+    clf = RandomForestClassifier(n_estimators=100, max_depth=3, random_state=2)
     clf.fit(explanatory, objective)
     
     # prediction
     prediction = clf.predict(explanatory_test)
+
+    # accuracy
+    """
+    correct = pd.read_csv("correct.csv")
+    correct_s = correct["Survived"].values
+    print(clf.score(explanatory_test, correct_s))
+    """
 
     # get PassengerId
     pid        = np.array(test["PassengerId"]).astype(int)
