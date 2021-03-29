@@ -1,15 +1,15 @@
 # ------------------------------------------------
-# Macine Learnig     : random forest
+# Macine Learnig     : svm
 # Target Competition : titanic
-# Score              : 0.74641  
+# Score              : 0.63875
 # https://www.kaggle.com/c/titanic/overview
 # ------------------------------------------------
 
 import pandas as pd
 import numpy as np
 
-# random forest
-from sklearn.ensemble import RandomForestClassifier
+# svm
+from sklearn import svm
 
 # ------------------------------------------------
 # calculate the number of deficits for each data
@@ -72,9 +72,8 @@ def main():
     # get the explanatory variables for "test"
     explanatory_test = test[["Pclass", "Sex", "Age", "Fare"]].values
 
-    # machine learning by random forest
-    #clf = RandomForestClassifier(n_estimators=100, random_state=100)
-    clf = RandomForestClassifier(n_estimators=100, max_depth=3, random_state=2)
+    # machine learning
+    clf = svm.SVC(kernel='rbf', C=10, gamma=0.1)
     clf.fit(explanatory, objective)
     
     # prediction
@@ -92,7 +91,7 @@ def main():
     # combination of PassengerId and prediction
     solution   = pd.DataFrame(prediction, pid, columns = ["Survived"])
     # output .csv
-    solution.to_csv("solution_random_forest.csv", index_label = ["PassengerId"])
+    solution.to_csv("solution_svm.csv", index_label = ["PassengerId"])
 
 if __name__ == "__main__":
     main()

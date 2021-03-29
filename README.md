@@ -22,3 +22,12 @@ https://www.kaggle.com/c/titanic/data
 
 それぞれのフォルダに上記の2ファイルを置きます  
 .pyを実行すると予測の結果が出力されます
+
+<br>
+<br>
+<br>
+  
+## 追記  
+neural_network, SVMを追加しました  
+これらの3つの方法で多数決も追加した  
+

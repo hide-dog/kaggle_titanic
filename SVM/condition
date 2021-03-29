@@ -1,0 +1,6 @@
+
+score:0.74641
+RandomForestClassifier(n_estimators=100, random_state=100)
+
+score:0.78229
+RandomForestClassifier(n_estimators=100, max_depth=3, random_state=2)
