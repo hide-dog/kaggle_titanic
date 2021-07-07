@@ -3,6 +3,7 @@
 # ------------------------------------------------
 import numpy as np
 import math
+import copy
 
 # ------------------------------------------------
 # read file
@@ -68,19 +69,150 @@ def read_test_file(inf):
 #end
 
 # ------------------------------------------------
+# read file
+# ------------------------------------------------
+def read_corr_file(inf):
+    # read file
+    with open(inf) as f:
+        lines = f.readlines()
+    #end
+    s = len(lines)
+    data = np.zeros(s-1)
+    
+    for i in range(s-1):
+        l = lines[i+1].split(",")
+
+        if l[1] == "":
+            data[i] = 1
+        else:
+            #print(l[1].replace("\n",""))
+            data[i] = int(l[1].replace("\n",""))
+        #end
+    return data
+#end
+
+# ------------------------------------------------
+# logistic sigmoid function
+# ------------------------------------------------
+def sigm_func(u):
+    f = 1 / ( 1 + math.exp(-u) )
+    return f
+#end
+
+# ------------------------------------------------
+# softmax function 
+# ------------------------------------------------
+def softmax_func(u):
+    size = len(u)
+    y = np.zeros(size)
+
+    s = 0
+    for i in range(size):
+        s += math.exp(u[i])
+    #end
+    for i in range(size):
+        y[i] = math.exp(u[i]) / s
+    #end
+    return y
+#end
+
+# ------------------------------------------------
+# test 
+# ------------------------------------------------
+def test_nn(test_data, corr_data, w):
+    size = len(test_data)
+    ans = np.zeros(size)
+    u = np.zeros(2)
+    
+    point = 0
+    for i in range(size):
+        u[0] = 1.0 * w[0,0] + test_data[i][0] * w[0,1] + test_data[i][1] * w[0,2] 
+        u[1] = 1.0 * w[1,0] + test_data[i][0] * w[1,1] + test_data[i][1] * w[1,2]
+
+        y = softmax_func(u)
+
+        if y[0] >= y[1]:
+            ans[i] = 0
+        else:
+            ans[i] = 1
+        #end
+
+        if ans[i] == corr_data[i]:
+            point += 1
+        else:
+            pass
+        #end
+    #end
+    print(" point : " + str(point/size))
+#end
+
+
+# ------------------------------------------------
 # main
 # ------------------------------------------------
 def main():
     f_train = "train.csv"
     f_test = "test.csv"
+    f_corr = "correct.csv"
+
+    in_para    = 2
+    num_layers = 1
+
+    mu = 0.5
+    ep = 0.001
+
+    # setup
+    w_old = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
+    w_new = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
+    w_temp = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
+    w_old[1,1]=0.5
     
+    u = np.zeros(2)
+    delta = np.zeros(2)
+    dEdw  = np.zeros((2, in_para+1))
+
     # read file
     train_re, train_data = read_train_file(f_train)
     test_data = read_test_file(f_test)
+    corr_data = read_corr_file(f_corr)
+    s = len(train_re)
 
     # machine learning by NN
+    for k in range(100):
+        for i in range(s):
+            # Forward propagation
+            u[0] = 1.0 * w_new[0,0] + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
+            u[1] = 1.0 * w_new[1,0] + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
+            
+            # Back propagation
+            # delta at output layer
+            y = softmax_func(u)
+            delta[0] = y[0] - train_re[i]
+            delta[1] = y[1] - train_re[i]
 
-    # get PassengerId
+            # slope
+            dEdw[0,0] = delta[0] * 0.0
+            dEdw[0,1] = delta[0] * train_data[i,0]
+            dEdw[0,2] = delta[0] * train_data[i,1]
+            dEdw[1,0] = delta[1] * 0.0
+            dEdw[1,1] = delta[1] * train_data[i,0]
+            dEdw[1,2] = delta[1] * train_data[i,1]
+
+            # update w
+            w_temp = w_old + mu*(w_new - w_old) - ep*dEdw
+            w_old = copy.deepcopy(w_new)
+            w_new = copy.deepcopy(w_temp)
+
+            if i == 10:
+                print(dEdw)
+                print(w_temp)
+                print(delta)
+                print(u)
+                print(y)
+        #end
+        test_nn(test_data, corr_data, w_new)
+    #end
 #end
+
 if __name__ == "__main__":
     main()
