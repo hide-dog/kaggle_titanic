@@ -4,6 +4,7 @@
 import numpy as np
 import math
 import copy
+import random
 
 # ------------------------------------------------
 # read file
@@ -14,28 +15,29 @@ def read_train_file(inf):
         lines = f.readlines()
     #end
     s = len(lines)
-    result = np.zeros(s-1)
+    result = np.zeros((s-1,2))
     data = np.zeros((s-1,2))
     
     for i in range(s-1):
         l = lines[i+1].split(",")
 
         if l[1] == "":
-            result[i] = 0
+            result[i,0] = 0
+            result[i,1] = 1
         else:
-            result[i] = int(l[1])
+            result[i,int(l[1])] = 1
         #end
 
         if l[2] == "":
-            data[i][0] = 3
+            data[i][0] = 1
         else:
-            data[i][0] = int(l[2])
+            data[i][0] = int(l[2]) / 3.0
         #end
 
         if l[6] == "":
-            data[i][1] = 30
+            data[i][1] = 1
         else:
-            data[i][1] = math.floor(float(l[6]))
+            data[i][1] = math.floor(float(l[6])) / 100
         #end
     return  result, data   
 #end
@@ -55,15 +57,15 @@ def read_test_file(inf):
         l = lines[i+1].split(",")
 
         if l[1] == "":
-            data[i][0] = 3
+            data[i][0] = 1.0
         else:
-            data[i][0] = int(l[1])
+            data[i][0] = int(l[1]) / 3.0
         #end
 
         if l[5] == "":
-            data[i][1] = 30
+            data[i][1] = 1.0
         else:
-            data[i][1] = math.floor(float(l[5]))
+            data[i][1] = math.floor(float(l[5])) / 100
         #end
     return  data
 #end
@@ -158,14 +160,21 @@ def main():
     in_para    = 2
     num_layers = 1
 
-    mu = 0.5
-    ep = 0.001
+    mu = 0.9
+    ep = 0.5
+    sigma = 5.0
 
     # setup
     w_old = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
     w_new = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
     w_temp = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
-    w_old[1,1]=0.5
+    
+    for i in range(1, 2):
+        for j in range(in_para+1):
+            w_old[i,j] = random.gauss(0.5, sigma)
+            w_new[i,j] = random.gauss(0.5, sigma)
+        #end
+    #end
     
     u = np.zeros(2)
     delta = np.zeros(2)
@@ -179,39 +188,37 @@ def main():
 
     # machine learning by NN
     for k in range(100):
-        for i in range(s):
+        dEdw  = np.zeros((2, in_para+1))
+        for l in range(10):
+            i = random.randint(0,s-1)
+
             # Forward propagation
-            u[0] = 1.0 * w_new[0,0] + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
-            u[1] = 1.0 * w_new[1,0] + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
+            u[0] = 1.0 + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
+            u[1] = 1.0 + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
             
             # Back propagation
             # delta at output layer
             y = softmax_func(u)
-            delta[0] = y[0] - train_re[i]
-            delta[1] = y[1] - train_re[i]
+            delta[0] = y[0] - train_re[i,0]
+            delta[1] = y[1] - train_re[i,1]
 
             # slope
-            dEdw[0,0] = delta[0] * 0.0
-            dEdw[0,1] = delta[0] * train_data[i,0]
-            dEdw[0,2] = delta[0] * train_data[i,1]
-            dEdw[1,0] = delta[1] * 0.0
-            dEdw[1,1] = delta[1] * train_data[i,0]
-            dEdw[1,2] = delta[1] * train_data[i,1]
-
-            # update w
-            w_temp = w_old + mu*(w_new - w_old) - ep*dEdw
-            w_old = copy.deepcopy(w_new)
-            w_new = copy.deepcopy(w_temp)
-
-            if i == 10:
-                print(dEdw)
-                print(w_temp)
-                print(delta)
-                print(u)
-                print(y)
+            dEdw[0,0] += delta[0] * 0.0
+            dEdw[0,1] += delta[0] * train_data[i,0]
+            dEdw[0,2] += delta[0] * train_data[i,1]
+            dEdw[1,0] += delta[1] * 0.0
+            dEdw[1,1] += delta[1] * train_data[i,0]
+            dEdw[1,2] += delta[1] * train_data[i,1]
         #end
+
+        # update w
+        w_temp = w_old + mu*(w_new - w_old) - ep*dEdw / 10
+        w_old = copy.deepcopy(w_new)
+        w_new = copy.deepcopy(w_temp)
+
         test_nn(test_data, corr_data, w_new)
     #end
+    print(w_new)
 #end
 
 if __name__ == "__main__":
