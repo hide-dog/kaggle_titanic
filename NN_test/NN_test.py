@@ -5,92 +5,187 @@ import numpy as np
 import math
 import copy
 import random
+import tqdm
+
+# ------------------------------------------------
+# main
+# ------------------------------------------------
+def main():
+    # -------------------------------------
+    # file
+    # -------------------------------------
+    f_train = "train.txt"
+    f_test  = "test.txt"
+
+    f_re_train = "corr_history_train"
+    f_re_test  = "corr_history_test"
+    
+    # -------------------------------------
+    # input & output
+    # -------------------------------------
+    in_n    = 10
+    out_n   = 2 
+
+    # -------------------------------------
+    # nn para
+    # -------------------------------------
+    num_layers = 1
+    mu = 0.9
+    ep = 0.5
+    sigma = 3.0
+
+    # -------------------------------------
+    # nn loop
+    # -------------------------------------
+    main_ln  = 300
+    batch_ln = 10
+
+
+    
+
+    # ---------------------------------------------------------------------------------------
+    # -------------------------------------
+    # setup w
+    # -------------------------------------
+    w_old  = np.ones((out_n, in_n+1)) # bを無くす ,常に1を出力する層を追加
+    w_new  = np.ones((out_n, in_n+1)) # bを無くす, 常に1を出力する層を追加
+    w_temp = np.ones((out_n, in_n+1)) # bを無くす, 常に1を出力する層を追加
+
+    # dis of gauss    
+    for i in range(1, out_n):
+        for j in range(in_n+1):
+            w_old[i,j] = random.gauss(0.5, sigma)
+            w_new[i,j] = random.gauss(0.5, sigma)
+        #end
+    #end
+
+    # -------------------------------------
+    # setup for nn
+    # -------------------------------------    
+    u     = np.zeros(out_n)
+    delta = np.zeros(out_n)
+    dEdw  = np.zeros((out_n, in_n+1))
+
+    roca_test  = np.zeros(main_ln)
+    roca_train = np.zeros(main_ln)
+
+    # -------------------------------------
+    # reset file
+    # -------------------------------------
+    with open(f_re_train, "w") as f:
+        pass
+    #end
+    with open(f_re_test, "w") as f:
+        pass
+    #end
+
+
+    # -------------------------------------
+    # read file
+    # -------------------------------------
+    train_re, train_data, train_ans = read_train_file(f_train)
+    test_re,  test_data,  test_ans  = read_train_file(f_test)
+    s = len(train_re)
+    
+    # -------------------------------------
+    # machine learning by NN
+    # -------------------------------------
+    for t in tqdm.tqdm(range(main_ln)):
+        dEdw  = np.zeros((out_n, in_n+1))
+        for l in range(batch_ln):
+            i = random.randint(0, s-1)
+
+            # Forward propagation
+            for j in range(out_n):
+                u[j] = 1.0
+                for k in range(in_n):
+                    u[j] += train_data[k,i] * w_new[j,k+1]
+                #end
+            #end
+            """
+            u[0] = 1.0 + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
+            u[1] = 1.0 + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
+            """
+            
+            # Back propagation
+            # delta at output layer
+            y = softmax_func(u)
+            for j in range(out_n):
+                delta[j] = y[j] - train_re[i,j]
+            #end
+            """
+            delta[0] = y[0] - train_re[i,0]
+            delta[1] = y[1] - train_re[i,1]
+            """
+
+            # slope
+            for j in range(out_n):
+                for k in range(1, in_n+1):
+                    dEdw[j,k] += delta[j] * train_data[k-1,i]
+                #end
+            #end
+
+            """
+            dEdw[0,0] += delta[0] * 0.0
+            dEdw[0,1] += delta[0] * train_data[i,0]
+            dEdw[0,2] += delta[0] * train_data[i,1]
+            dEdw[1,0] += delta[1] * 0.0
+            dEdw[1,1] += delta[1] * train_data[i,0]
+            dEdw[1,2] += delta[1] * train_data[i,1]
+            """
+        #end
+
+        # update w
+        w_temp = w_old + mu*(w_new - w_old) - ep*dEdw / batch_ln
+        w_old  = copy.deepcopy(w_new)
+        w_new  = copy.deepcopy(w_temp)
+
+        # check rate of correct answer        
+        roca_train[t] = test_nn(train_data, train_ans, w_new, in_n, out_n, f_re_train)
+        roca_test[t]  = test_nn(test_data, test_ans, w_new, in_n, out_n, f_re_test)
+    #end
+
+    # output
+    with open(f_re_train, "a") as f:
+        for t in range(main_ln):
+            f.write(str(roca_train[t]) + "\n")
+        #end
+    #end
+    with open(f_re_test, "a") as f:
+        for t in range(main_ln):
+            f.write(str(roca_test[t]) + "\n")
+        #end
+    #end
+#end
+
 
 # ------------------------------------------------
 # read file
 # ------------------------------------------------
 def read_train_file(inf):
     # read file
-    with open(inf) as f:
-        lines = f.readlines()
-    #end
-    s = len(lines)
-    result = np.zeros((s-1,2))
-    data = np.zeros((s-1,2))
+    PassengerId, Survived, Pclass, Name, Sex, Age, SibSp, Parch, Ticket, Fare, Cabin, Embarked \
+    = np.loadtxt(inf, delimiter = ",",unpack = True, skiprows = 1)
+
+    s = len(PassengerId)
+    result = np.zeros((s,2))
     
-    for i in range(s-1):
-        l = lines[i+1].split(",")
-
-        if l[1] == "":
-            result[i,0] = 0
-            result[i,1] = 1
-        else:
-            result[i,int(l[1])] = 1
-        #end
-
-        if l[2] == "":
-            data[i][0] = 1
-        else:
-            data[i][0] = int(l[2]) / 3.0
-        #end
-
-        if l[6] == "":
-            data[i][1] = 1
-        else:
-            data[i][1] = math.floor(float(l[6])) / 100
-        #end
-    return  result, data   
-#end
-
-# ------------------------------------------------
-# read file
-# ------------------------------------------------
-def read_test_file(inf):
-    # read file
-    with open(inf) as f:
-        lines = f.readlines()
-    #end
-    s = len(lines)
-    data = np.zeros((s-1,2))
+    train_ans = copy.deepcopy(Survived)
+    data      = np.array([Pclass, Name, Sex, Age, SibSp, Parch, Ticket, Fare, Cabin, Embarked])
     
-    for i in range(s-1):
-        l = lines[i+1].split(",")
-
-        if l[1] == "":
-            data[i][0] = 1.0
-        else:
-            data[i][0] = int(l[1]) / 3.0
-        #end
-
-        if l[5] == "":
-            data[i][1] = 1.0
-        else:
-            data[i][1] = math.floor(float(l[5])) / 100
-        #end
-    return  data
-#end
-
-# ------------------------------------------------
-# read file
-# ------------------------------------------------
-def read_corr_file(inf):
-    # read file
-    with open(inf) as f:
-        lines = f.readlines()
+    for i in range(s):
+        # save ans
+        result[i,int(train_ans[i])] = 1
     #end
-    s = len(lines)
-    data = np.zeros(s-1)
-    
-    for i in range(s-1):
-        l = lines[i+1].split(",")
 
-        if l[1] == "":
-            data[i] = 1
-        else:
-            #print(l[1].replace("\n",""))
-            data[i] = int(l[1].replace("\n",""))
+    for i in range(len(data)):
+        m = max(data[i])
+        for j in range(s):
+            data[i,j] = data[i,j] / m
         #end
-    return data
+    #edn
+
+    return  result, data, train_ans 
 #end
 
 # ------------------------------------------------
@@ -121,23 +216,24 @@ def softmax_func(u):
 # ------------------------------------------------
 # test 
 # ------------------------------------------------
-def test_nn(test_data, corr_data, w):
-    size = len(test_data)
+def test_nn(test_data, corr_data, w, in_n, out_n, of):
+    size = len(test_data[0])
     ans = np.zeros(size)
-    u = np.zeros(2)
+    u = np.zeros(out_n)
     
     point = 0
     for i in range(size):
-        u[0] = 1.0 * w[0,0] + test_data[i][0] * w[0,1] + test_data[i][1] * w[0,2] 
-        u[1] = 1.0 * w[1,0] + test_data[i][0] * w[1,1] + test_data[i][1] * w[1,2]
-
+        for j in range(out_n):
+            u[j] = 1.0
+            for k in range(in_n):
+                u[j] += test_data[k,i] * w[j,k+1]
+            #end
+        #end
+        
         y = softmax_func(u)
 
-        if y[0] >= y[1]:
-            ans[i] = 0
-        else:
-            ans[i] = 1
-        #end
+        max_index = np.argmax(y)
+        ans[i] = max_index
 
         if ans[i] == corr_data[i]:
             point += 1
@@ -145,81 +241,15 @@ def test_nn(test_data, corr_data, w):
             pass
         #end
     #end
-    print(" point : " + str(point/size))
+
+    # rate of correct answer    
+    roca = float(point) / float(size)
+    #end
+
+    return roca
 #end
 
-
-# ------------------------------------------------
-# main
-# ------------------------------------------------
-def main():
-    f_train = "train.csv"
-    f_test = "test.csv"
-    f_corr = "correct.csv"
-
-    in_para    = 2
-    num_layers = 1
-
-    mu = 0.9
-    ep = 0.5
-    sigma = 5.0
-
-    # setup
-    w_old = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
-    w_new = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
-    w_temp = np.ones((2, in_para+1)) # bを無くす常に1を出力する層を追加
-    
-    for i in range(1, 2):
-        for j in range(in_para+1):
-            w_old[i,j] = random.gauss(0.5, sigma)
-            w_new[i,j] = random.gauss(0.5, sigma)
-        #end
-    #end
-    
-    u = np.zeros(2)
-    delta = np.zeros(2)
-    dEdw  = np.zeros((2, in_para+1))
-
-    # read file
-    train_re, train_data = read_train_file(f_train)
-    test_data = read_test_file(f_test)
-    corr_data = read_corr_file(f_corr)
-    s = len(train_re)
-
-    # machine learning by NN
-    for k in range(100):
-        dEdw  = np.zeros((2, in_para+1))
-        for l in range(10):
-            i = random.randint(0,s-1)
-
-            # Forward propagation
-            u[0] = 1.0 + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
-            u[1] = 1.0 + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
-            
-            # Back propagation
-            # delta at output layer
-            y = softmax_func(u)
-            delta[0] = y[0] - train_re[i,0]
-            delta[1] = y[1] - train_re[i,1]
-
-            # slope
-            dEdw[0,0] += delta[0] * 0.0
-            dEdw[0,1] += delta[0] * train_data[i,0]
-            dEdw[0,2] += delta[0] * train_data[i,1]
-            dEdw[1,0] += delta[1] * 0.0
-            dEdw[1,1] += delta[1] * train_data[i,0]
-            dEdw[1,2] += delta[1] * train_data[i,1]
-        #end
-
-        # update w
-        w_temp = w_old + mu*(w_new - w_old) - ep*dEdw / 10
-        w_old = copy.deepcopy(w_new)
-        w_new = copy.deepcopy(w_temp)
-
-        test_nn(test_data, corr_data, w_new)
-    #end
-    print(w_new)
-#end
-
+# ---------------------------------------------
+# ---------------------------------------------
 if __name__ == "__main__":
     main()
