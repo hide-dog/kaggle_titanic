@@ -23,13 +23,14 @@ def main():
     # -------------------------------------
     # input & output
     # -------------------------------------
-    in_n    = 10
-    out_n   = 2 
+    in_n       = 10                  # +1 for b
+    fout_n     = 2                   # final output
+    out_n_at_m = [6]          # number of cell at middle layers
 
     # -------------------------------------
     # nn para
     # -------------------------------------
-    num_layers = 1
+    num_layers = 1   # middle layer
     mu = 0.9
     ep = 0.5
     sigma = 3.0
@@ -38,33 +39,43 @@ def main():
     # nn loop
     # -------------------------------------
     main_ln  = 300
-    batch_ln = 10
+    online_ln = 10
 
 
-    
+    # -------------------------------------
+    # cal
+    # -------------------------------------
+    out_n_at_m.append(fout_n)
+
+    temp  = copy.deepcopy(out_n_at_m)
+    temp.append(in_n+1)
+    out_n = max(temp)
 
     # ---------------------------------------------------------------------------------------
     # -------------------------------------
     # setup w
     # -------------------------------------
-    w_old  = np.ones((out_n, in_n+1)) # bを無くす ,常に1を出力する層を追加
-    w_new  = np.ones((out_n, in_n+1)) # bを無くす, 常に1を出力する層を追加
-    w_temp = np.ones((out_n, in_n+1)) # bを無くす, 常に1を出力する層を追加
+    w_old  = np.ones((num_layers+1, in_n+1, out_n))
+    w_new  = np.ones((num_layers+1, in_n+1, out_n))
+    w_temp = np.ones((num_layers+1, in_n+1, out_n))
 
     # dis of gauss    
-    for i in range(1, out_n):
+    for i in range(num_layers+1):
         for j in range(in_n+1):
-            w_old[i,j] = random.gauss(0.5, sigma)
-            w_new[i,j] = random.gauss(0.5, sigma)
+            for k in range(1, out_n):
+                w_old[i,j,k] = random.gauss(0.5, sigma)
+                w_new[i,j,k] = random.gauss(0.5, sigma)
+            #end
         #end
     #end
 
     # -------------------------------------
     # setup for nn
     # -------------------------------------    
-    u     = np.zeros(out_n)
-    delta = np.zeros(out_n)
-    dEdw  = np.zeros((out_n, in_n+1))
+    u     = np.zeros((num_layers+1, out_n)) # sum result
+    z     = np.zeros((num_layers+2, out_n)) # output
+    delta = np.zeros((num_layers+2, out_n))
+    dEdw  = np.zeros((num_layers+1, in_n+1, out_n))
 
     roca_test  = np.zeros(main_ln)
     roca_train = np.zeros(main_ln)
@@ -91,58 +102,99 @@ def main():
     # machine learning by NN
     # -------------------------------------
     for t in tqdm.tqdm(range(main_ln)):
-        dEdw  = np.zeros((out_n, in_n+1))
-        for l in range(batch_ln):
-            i = random.randint(0, s-1)
+        for l in range(online_ln):
+            n = random.randint(0, s-1)
+            
+            # store init input para
+            z[0,0] = 1.0
+            for j in range(in_n):
+                z[0,j] = train_data[n,j]
+            #end
 
             # Forward propagation
-            for j in range(out_n):
-                u[j] = 1.0
-                for k in range(in_n):
-                    u[j] += train_data[k,i] * w_new[j,k+1]
+            for i in range(num_layers+1):
+
+                for k in range(out_n_at_m[i]):
+                    u[i,k] = 1.0
+                    for j in range(in_n):
+                        u[i,k] += z[i,j] * w_new[i,j,k+1]
+                    #end
+                #end
+                """
+                u[0] = 1.0 + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
+                u[1] = 1.0 + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
+                """
+                
+                # activation function
+                if i != num_layers:
+                    # middle layers
+                    z[i+1] = rectifier_func(u[i])
+                else:
+                    # output layer
+                    z[i+1] = softmax_func(u[i])
                 #end
             #end
-            """
-            u[0] = 1.0 + train_data[i][0] * w_new[0,1] + train_data[i][1] * w_new[0,2] 
-            u[1] = 1.0 + train_data[i][0] * w_new[1,1] + train_data[i][1] * w_new[1,2]
-            """
-            
+                
             # Back propagation
             # delta at output layer
-            y = softmax_func(u)
-            for j in range(out_n):
-                delta[j] = y[j] - train_re[i,j]
+            i = num_layers
+            for k in range(out_n_at_m[i]):
+                delta[i,k] = z[i,k] - train_re[n,k]
             #end
             """
             delta[0] = y[0] - train_re[i,0]
             delta[1] = y[1] - train_re[i,1]
             """
 
-            # slope
-            for j in range(out_n):
-                for k in range(1, in_n+1):
-                    dEdw[j,k] += delta[j] * train_data[k-1,i]
+            for ii in range(num_layers+1):
+                i = num_layers - ii
+                
+                # slope
+                for k in range(1, out_n_at_m[i]):
+                    for j in range(out_n_at_m[i-1]):
+                        dEdw[i-1,j,k] += delta[i,k] * z[i-1,j]
+                    #end
+                #end
+                """
+                dEdw[0,0] += delta[0] * 0.0
+                dEdw[0,1] += delta[0] * train_data[i,0]
+                dEdw[0,2] += delta[0] * train_data[i,1]
+                dEdw[1,0] += delta[1] * 0.0
+                dEdw[1,1] += delta[1] * train_data[i,0]
+                dEdw[1,2] += delta[1] * train_data[i,1]
+                """
+
+                # delta
+                for k in range(out_n_at_m[i-1]):
+                    for kk in range(out_n_at_m[i]):
+                        delta[i-1,k] += delta[i,kk] *(w_new[i,kk,k] * rectifier_func_derivation(u[i,k]) )
+                    #end
                 #end
             #end
 
-            """
-            dEdw[0,0] += delta[0] * 0.0
-            dEdw[0,1] += delta[0] * train_data[i,0]
-            dEdw[0,2] += delta[0] * train_data[i,1]
-            dEdw[1,0] += delta[1] * 0.0
-            dEdw[1,1] += delta[1] * train_data[i,0]
-            dEdw[1,2] += delta[1] * train_data[i,1]
-            """
+            # update w
+            w_temp = w_old + mu*(w_new - w_old) - ep*dEdw / online_ln
+            w_old  = copy.deepcopy(w_new)
+            w_new  = copy.deepcopy(w_temp)
+
+            # reset 
+            for i in range(num_layers+1):
+                for j in range(in_n+1):
+                    for k in range(out_n):        
+                        dEdw[i,j,k] = 0.0
+                    #end
+                #end
+            #end
+            for i in range(num_layers+2):    
+                for k in range(out_n):        
+                    delta[i,k] = 0.0
+                #end
+            #end
         #end
-
-        # update w
-        w_temp = w_old + mu*(w_new - w_old) - ep*dEdw / batch_ln
-        w_old  = copy.deepcopy(w_new)
-        w_new  = copy.deepcopy(w_temp)
-
+        
         # check rate of correct answer        
-        roca_train[t] = test_nn(train_data, train_ans, w_new, in_n, out_n, f_re_train)
-        roca_test[t]  = test_nn(test_data, test_ans, w_new, in_n, out_n, f_re_test)
+        roca_train[t] = test_nn(train_data, train_ans, w_new, in_n, out_n, out_n_at_m, num_layers, f_re_train)
+        roca_test[t]  = test_nn( test_data,  test_ans, w_new, in_n, out_n, out_n_at_m, num_layers,  f_re_test)
     #end
 
     # output
@@ -183,7 +235,10 @@ def read_train_file(inf):
         for j in range(s):
             data[i,j] = data[i,j] / m
         #end
-    #edn
+    #end
+    
+    # transposed matrix
+    data = data.T 
 
     return  result, data, train_ans 
 #end
@@ -228,6 +283,18 @@ def rectifier_func(u):
 #end
 
 # ------------------------------------------------
+# Derivation of Rectified linear function
+# ------------------------------------------------
+def rectifier_func_derivation(ui):
+    if ui <= 0.0:
+        fd = 0.0
+    else:
+        fd = 1.0
+    #end
+    return fd
+#end
+
+# ------------------------------------------------
 # linear mapping ( function )
 # ------------------------------------------------
 def linear_func(u):
@@ -262,23 +329,40 @@ def softmax_func(u):
 # ------------------------------------------------
 # test 
 # ------------------------------------------------
-def test_nn(test_data, corr_data, w, in_n, out_n, of):
+def test_nn(test_data, corr_data, w, in_n, out_n, out_n_at_m, num_layers, of):
     size = len(test_data[0])
     ans = np.zeros(size)
-    u = np.zeros(out_n)
+    u     = np.zeros((num_layers+1, out_n)) # sum result
+    z     = np.zeros((num_layers+2, out_n)) # output
     
     point = 0
-    for i in range(size):
-        for j in range(out_n):
-            u[j] = 1.0
-            for k in range(in_n):
-                u[j] += test_data[k,i] * w[j,k+1]
-            #end
+    for n in range(size):
+        # store input para
+        z[0,0] = 1.0
+        for j in range(in_n):
+            z[0,j] = test_data[n,j]
         #end
         
-        y = softmax_func(u)
+        for i in range(num_layers+1):
+            for k in range(out_n_at_m[i]):
+                u[i,k] = 1.0
+                for j in range(in_n):
+                    u[i,k] += z[i,j] * w[i,j,k+1]
+                #end
+            #end
 
-        max_index = np.argmax(y)
+            # activation function
+            if i != num_layers:
+                # middle layers
+                z[i+1] = rectifier_func(u[i])
+            else:
+                # output layer
+                z[i+1] = softmax_func(u[i])
+            #end
+        #end
+
+        # if corr or not
+        max_index = np.argmax(z[num_layers])
         ans[i] = max_index
 
         if ans[i] == corr_data[i]:
