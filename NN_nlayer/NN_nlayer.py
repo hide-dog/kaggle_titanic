@@ -34,7 +34,12 @@ def main():
     num_mlayers = 1   # middle layer
     mu = 0.9
     ep = 0.5
-    sigma = 0.5
+
+    # -------------------------------------
+    # init weight
+    # -------------------------------------
+    mu_ave = 0.0    # average
+    sigma  = 1.0    # variance value
 
     # -------------------------------------
     # nn loop
@@ -62,8 +67,8 @@ def main():
     for i in range(num_layers-1):
         for j in range(1, out_n):
             for k in range(out_n):
-                w_old[i,j,k] = random.gauss(0.5, sigma)
-                w_new[i,j,k] = random.gauss(0.5, sigma)
+                w_old[i,j,k] = random.gauss(mu_ave, sigma)
+                w_new[i,j,k] = random.gauss(mu_ave, sigma)
             #end
         #end
     #end
@@ -95,7 +100,13 @@ def main():
     train_re, train_data, train_ans = read_train_file(f_train)
     test_re,  test_data,  test_ans  = read_train_file(f_test)
     s = len(train_re)
-    
+
+    # -------------------------------------
+    # whitening
+    # -------------------------------------
+    train_data = whitening(train_data)
+    test_data  = whitening(test_data)
+
     # -------------------------------------
     # machine learning by NN
     # -------------------------------------
@@ -203,8 +214,8 @@ def main():
         # check rate of correct answer        
         roca_test[t]  = test_nn( test_data,  test_ans, w_new, in_n, out_n, out_n_at_m, num_layers,  f_re_test)
         roca_train[t] = test_nn(train_data, train_ans, w_new, in_n, out_n, out_n_at_m, num_layers, f_re_train)
-        
     #end
+    print(w_new)
 
     # output
     with open(f_re_train, "a") as f:
@@ -250,6 +261,45 @@ def read_train_file(inf):
     data = data.T 
 
     return  result, data, train_ans 
+#end
+
+# ------------------------------------------------
+# whitening
+# ------------------------------------------------
+def whitening(data):
+    nl = len(data)
+    nd = len(data[0])
+
+    # ave = 0    
+    for i in range(nl):
+        ave = 0.0
+        for j in range(nd):
+            ave += data[i,j]
+        #end
+        ave /= nd
+        for j in range(nd):
+            data[i,j] -= ave 
+        #end
+    #end
+    
+    # variance value = 0
+    for i in range(nl):
+        sigma = 0.0
+        for j in range(nd):
+            sigma += data[i,j]**2
+        #end
+        sigma /= nd
+        sigma = (sigma)**0.5
+        
+        if sigma == 0.0:
+            sigma = 1.0
+        #end
+        for j in range(nd):
+            data[i,j] /= sigma
+        #end
+    #end
+
+    return data
 #end
 
 # ------------------------------------------------
